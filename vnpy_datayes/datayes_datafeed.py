@@ -1,12 +1,14 @@
-import cx_Oracle #安装的时候使用cx-Oracle搜索
+import cx_Oracle  # 安装的时候使用cx-Oracle搜索
 import pandas as pd
+import pyarrow
 from dotenv import load_dotenv
 import os
 from datetime import datetime
-from typing import List
+from typing import Dict, List, Optional, Callable
 from vnpy.trader.constant import Interval
 from vnpy.trader.object import BarData, HistoryRequest
 from vnpy.trader.utility import round_to
+from vnpy.trader.constant import Exchange, Interval
 
 # Constants for the Oracle connection - replace with your actual credentials
 # Retrieve the Oracle credentials from environment variables
@@ -14,6 +16,13 @@ load_dotenv()  # This is the crucial part
 ORACLE_USERNAME = os.getenv('ORACLE_USERNAME')
 ORACLE_PASSWORD = os.getenv('ORACLE_PASSWORD')
 ORACLE_DSN = os.getenv('ORACLE_DSN')
+
+# 交易所映射
+EXCHANGE_VT2TS: Dict[Exchange, str] = {
+    Exchange.SSE: "XSHG",
+    Exchange.SZSE: "XSHE",
+}
+
 
 # Class to handle the connection and querying from Oracle
 class OracleDatafeed:
@@ -39,21 +48,23 @@ class OracleDatafeed:
             self.connection.close()
             self.connection = None
 
-    def query_bar_history(self, req: HistoryRequest) -> List[BarData]:
+    def query_bar_history(self, req: HistoryRequest, output: Callable = print) -> Optional[List[BarData]]:
         """Query bar history data from MKT_FUNDD or MKT_IDXD tables."""
         symbol = req.symbol
-        exchange = req.exchange.value
-        interval = req.interval
+        exchange: Exchange = req.exchange
+        interval: Interval = req.interval
         start_date = req.start.strftime("%Y-%m-%d")
         end_date = req.end.strftime("%Y-%m-%d")
+
+        ts_exchange = EXCHANGE_VT2TS[exchange]
 
         # Determine the table based on symbol
         # This is a simple example; you might need more sophisticated logic
         if "IDX" in symbol:
-            table_name = "MKT_IDXD"
+            table_name = "F_DATAYES.MKT_IDXD"
             price_columns = "OPEN_INDEX, HIGHEST_INDEX, LOWEST_INDEX, CLOSE_INDEX"
         else:
-            table_name = "MKT_FUNDD"
+            table_name = "F_DATAYES.MKT_FUNDD"
             price_columns = "OPEN_PRICE, HIGHEST_PRICE, LOWEST_PRICE, CLOSE_PRICE"
 
         # Construct the query
@@ -67,7 +78,7 @@ class OracleDatafeed:
 
         # Execute the query
         cursor = self.connection.cursor()
-        cursor.execute(query, symbol=symbol, exchange=exchange, start_date=start_date, end_date=end_date)
+        cursor.execute(query, symbol=symbol, exchange=ts_exchange, start_date=start_date, end_date=end_date)
         records = cursor.fetchall()
         cursor.close()
 
@@ -79,7 +90,7 @@ class OracleDatafeed:
                 symbol=symbol,
                 exchange=exchange,
                 interval=interval,
-                datetime=trade_date, # Adjust if necessary to match the datetime format used by vn.py
+                datetime=trade_date,  # Adjust if necessary to match the datetime format used by vn.py
                 open_price=float(open_price),
                 high_price=float(high_price),
                 low_price=float(low_price),
@@ -92,6 +103,7 @@ class OracleDatafeed:
 
         return bars
 
+
 # Usage example
 if __name__ == "__main__":
     # Create a data feed instance and connect to Oracle
@@ -99,8 +111,8 @@ if __name__ == "__main__":
     if datafeed.connect():
         # Create a request for historical data
         request = HistoryRequest(
-            symbol="600519",
-            exchange=Exchange.SSE, # Replace with the appropriate vn.py Exchange enum
+            symbol="510300",
+            exchange=Exchange.SSE,  # Replace with the appropriate vn.py Exchange enum
             interval=Interval.DAILY,
             start=datetime(2020, 1, 1),
             end=datetime(2020, 12, 31)
