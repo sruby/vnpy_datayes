@@ -1,0 +1,6 @@
+pandas~=2.2.0
+pyarrow~=15.0.0
+python-dotenv~=1.0.1
+vnpy~=3.9.0
+setuptools~=69.0.3
+cx_Oracle
