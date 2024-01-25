@@ -15,6 +15,15 @@ from vnpy.trader.constant import Exchange, Interval
 # Retrieve the Oracle credentials from environment variables
 load_dotenv()  # This is the crucial part
 ORACLE_USERNAME = os.getenv('ORACLE_USERNAME')
+if not ORACLE_USERNAME:
+    # Get the home directory path
+    home_dir = os.getenv('USERPROFILE')
+    # Construct the path to the .env file
+    env_path = os.path.join(home_dir, '.env')
+    load_dotenv(env_path)
+    ORACLE_USERNAME = os.getenv('ORACLE_USERNAME')
+    if not ORACLE_USERNAME:
+        print("No Oracle username found in environment variables")
 ORACLE_PASSWORD = os.getenv('ORACLE_PASSWORD')
 ORACLE_DSN = os.getenv('ORACLE_DSN')
 
@@ -29,7 +38,11 @@ EXCHANGE_VT2TS: Dict[Exchange, str] = {
 # new subclass inherits from BaseDatafeed
 class DatayesDatafeed(BaseDatafeed):
     def __init__(self):
-        self.connection = None
+        self.connect()
+
+    def __del__(self):
+        """Disconnect from the database when the object is destroyed."""
+        self.disconnect()
 
     def connect(self):
         """Establish a connection to the Oracle database."""
@@ -105,28 +118,30 @@ class DatayesDatafeed(BaseDatafeed):
 
         return bars
 
+
 # Usage example
 if __name__ == "__main__":
     # Create a data feed instance and connect to Oracle
     datafeed = DatayesDatafeed()
-    if datafeed.connect():
-        # Create a request for historical data
-        request = HistoryRequest(
-            symbol="510300",
-            exchange=Exchange.SSE,  # Replace with the appropriate vn.py Exchange enum
-            interval=Interval.DAILY,
-            start=datetime(2020, 1, 1),
-            end=datetime(2020, 12, 31)
-        )
+    # if datafeed.connect():
+    # Create a request for historical data
 
-        # Fetch the historical data
-        bars = datafeed.query_bar_history(request)
+    request = HistoryRequest(
+        symbol="510300",
+        exchange=Exchange.SSE,  # Replace with the appropriate vn.py Exchange enum
+        interval=Interval.DAILY,
+        start=datetime(2020, 1, 1),
+        end=datetime(2020, 12, 31)
+    )
 
-        # Do something with the bars, like converting to a DataFrame
-        df = pd.DataFrame([bar.__dict__ for bar in bars])
+    # Fetch the historical data
+    bars = datafeed.query_bar_history(request)
 
-        # Disconnect from the database
-        datafeed.disconnect()
+    # Do something with the bars, like converting to a DataFrame
+    df = pd.DataFrame([bar.__dict__ for bar in bars])
 
-        # Print the DataFrame
-        print(df)
+    # Disconnect from the database
+    datafeed.disconnect()
+
+    # Print the DataFrame
+    print(df)
