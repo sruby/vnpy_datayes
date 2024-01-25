@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
 from vnpy.trader.constant import Interval
+from vnpy.trader.datafeed import BaseDatafeed
 from vnpy.trader.object import BarData, HistoryRequest
 from vnpy.trader.utility import round_to
 from vnpy.trader.constant import Exchange, Interval
@@ -25,7 +26,8 @@ EXCHANGE_VT2TS: Dict[Exchange, str] = {
 
 
 # Class to handle the connection and querying from Oracle
-class OracleDatafeed:
+# new subclass inherits from BaseDatafeed
+class DatayesDatafeed(BaseDatafeed):
     def __init__(self):
         self.connection = None
 
@@ -103,11 +105,10 @@ class OracleDatafeed:
 
         return bars
 
-
 # Usage example
 if __name__ == "__main__":
     # Create a data feed instance and connect to Oracle
-    datafeed = OracleDatafeed()
+    datafeed = DatayesDatafeed()
     if datafeed.connect():
         # Create a request for historical data
         request = HistoryRequest(
