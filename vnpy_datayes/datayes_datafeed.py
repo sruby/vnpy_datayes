@@ -33,6 +33,13 @@ EXCHANGE_VT2TS: Dict[Exchange, str] = {
     Exchange.SZSE: "XSHE",
 }
 
+# Mapping of ASSET_CLASS to its corresponding table and price columns
+ASSET_CLASS_TABLE_MAPPING = {
+    "IDX": ("F_DATAYES.mkt_idxd", "OPEN_INDEX OPEN_PRICE, HIGHEST_INDEX HIGHEST_PRICE, LOWEST_INDEX LOWEST_PRICE, CLOSE_INDEX CLOSE_PRICE"),
+    "F": ("F_DATAYES.mkt_fundd", "OPEN_PRICE, HIGHEST_PRICE, LOWEST_PRICE, CLOSE_PRICE"),
+    "E": ("F_DATAYES.mkt_equd", "OPEN_PRICE, HIGHEST_PRICE, LOWEST_PRICE, CLOSE_PRICE")
+}
+
 
 # Class to handle the connection and querying from Oracle
 # new subclass inherits from BaseDatafeed
@@ -64,23 +71,36 @@ class DatayesDatafeed(BaseDatafeed):
             self.connection = None
 
     def query_bar_history(self, req: HistoryRequest, output: Callable = print) -> Optional[List[BarData]]:
-        """Query bar history data from MKT_FUNDD or MKT_IDXD tables."""
+        """Query bar history data from different tables based on asset class."""
         symbol = req.symbol
         exchange: Exchange = req.exchange
         interval: Interval = req.interval
         start_date = req.start.strftime("%Y-%m-%d")
         end_date = req.end.strftime("%Y-%m-%d")
 
-        ts_exchange = EXCHANGE_VT2TS[exchange]
+        ts_exchange = EXCHANGE_VT2TS.get(exchange, exchange.value)
 
-        # Determine the table based on symbol
-        # This is a simple example; you might need more sophisticated logic
-        if "IDX" in symbol:
-            table_name = "F_DATAYES.MKT_IDXD"
-            price_columns = "OPEN_INDEX, HIGHEST_INDEX, LOWEST_INDEX, CLOSE_INDEX"
+        # Get the asset class of the security
+        cursor_security = self.connection.cursor()
+        query_security = """
+            SELECT ASSET_CLASS FROM F_DATAYES.MD_SECURITY WHERE TICKER_SYMBOL = :symbol AND EXCHANGE_CD = :exchange
+        """
+        cursor_security.execute(query_security, symbol=symbol, exchange=ts_exchange)
+        asset_class_record = cursor_security.fetchone()
+        cursor_security.close()
+
+        if asset_class_record:
+            asset_class = asset_class_record[0]
         else:
-            table_name = "F_DATAYES.MKT_FUNDD"
-            price_columns = "OPEN_PRICE, HIGHEST_PRICE, LOWEST_PRICE, CLOSE_PRICE"
+            output(f"No asset class found for symbol {symbol} on exchange {exchange}")
+            return None
+
+        # Get the table and column information based on asset class
+        table_info = ASSET_CLASS_TABLE_MAPPING.get(asset_class)
+        if not table_info:
+            output(f"No table mapping found for asset class {asset_class}")
+            return None
+        table_name, price_columns = table_info
 
         # Construct the query
         query = f"""
